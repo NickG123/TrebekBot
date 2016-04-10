@@ -1,0 +1,7 @@
+[config]
+port=88
+cert_file=mycert.pem
+key_file=privkey.pem
+api_key=
+webhook_server=https://example.com:88
+jeopardy_server=http://example.com:8080
