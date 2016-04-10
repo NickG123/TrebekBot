@@ -1,6 +1,7 @@
 import os
 import requests
 import uuid
+import redis
 
 from flask import Flask, jsonify, request
 from fuzzywuzzy import fuzz
@@ -13,6 +14,7 @@ parser.read(os.path.join(here, "config"))
 API_KEY = parser.get("config", "api_key")
 WEBHOOK_SERVER = parser.get("config", "webhook_server")
 JEOPARDY_SERVER = parser.get("config", "jeopardy_server")
+REDIS_NAMESPACE = parser.get("config", "redis_namespace")
 BANNED_WORDS = ["a", "the", "of", "and", "&"]
 
 app = Flask(__name__)
@@ -57,7 +59,7 @@ def response_correct(response, answer):
 id = uuid.uuid4()
 register_webhook(id)
 current_question = {}
-scoreboard = {}
+redis_conn = redis.StrictRedis()
 print id
 
 @app.route("/{0}".format(id), methods=['POST'])
@@ -81,25 +83,23 @@ def get_updates():
         return send_message(chat_id, format_question(current_question[chat_id]))
     if (text.lower().strip().startswith("/whois ") or text.lower().strip().startswith("/whatis "))  and current_question[chat_id] is not None:
         response = text.lower().strip().split(" ", 1)[-1]
-        if chat_id not in scoreboard:
-            scoreboard[chat_id] = {}
-        if name not in scoreboard[chat_id]:
-            scoreboard[chat_id][name] = 0
         if response_correct(response, current_question[chat_id]["answer"].lower().strip()):
             result = send_message(chat_id, "Correct", message_id)
-            scoreboard[chat_id][name] += current_question[chat_id]["value"]
+            redis_conn.incr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
             current_question[chat_id] = None
             return result
         else:
-            scoreboard[chat_id][name] -= current_question[chat_id]["value"]
+            redis_conn.decr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
             return send_message(chat_id, "Incorrect", message_id)
     if text.lower().strip().startswith("/giveup") and current_question[chat_id] is not None:
         result = send_message(chat_id, "Correct repsonse was: {0}".format(current_question[chat_id]["answer"]), None)
         current_question[chat_id] = None
         return result
     if text.lower().strip().startswith("/score"):
-        if chat_id in scoreboard:
-            scores = ["{0}: {1}".format(name, score) for name, score in scoreboard[chat_id].items() ]
-            score_string = "Scores:\n{0}".format("\n".join(scores))
-            return send_message(chat_id, score_string)
+        keys = redis_conn.keys("{0}:{1}:*".format(REDIS_NAMESPACE, chat_id))
+        names = [x.split(":")[-1] for x in keys]
+        score_vals = [redis_conn.get(x) for x in keys]
+        scores = ["{0}: {1}".format(name, score) for name, score in zip(names, score_vals)]
+        score_string = "Scores:\n{0}".format("\n".join(scores))
+        return send_message(chat_id, score_string)
     return ""
