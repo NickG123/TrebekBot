@@ -48,13 +48,15 @@ def get_question():
 def format_question(json):
     return "{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"])
     
-def response_correct(response, answer):
-    filtered_words = [x for x in answer.split() if x not in BANNED_WORDS]
+def filter_words(text):
+    filtered_words = [x for x in text.split() if x not in BANNED_WORDS]
     if len(filtered_words) > 0:
-        answer_filtered = " ".join(filtered_words)
+        return " ".join(filtered_words)
     else:
-        answer_filtered = answer
-    return fuzz.partial_ratio(response, answer_filtered) > 70
+        return text
+    
+def response_correct(response, answer):
+    return fuzz.token_sort_ratio(filter_words(response), filter_words(answer)) > 70
     
 id = uuid.uuid4()
 register_webhook(id)
