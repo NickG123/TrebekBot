@@ -19,6 +19,16 @@ BANNED_WORDS = ["a", "the", "of", "and", "&"]
 
 app = Flask(__name__)
 
+command_dict = {}
+
+def register_command(*commands):
+    def register(func):
+        for command in commands:
+            command_dict[command] = func
+        def returned_wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+    return register
+
 def make_request(method, parameters):
     endpoint = "https://api.telegram.org/bot{0}/{1}".format(API_KEY, method)
     resp = requests.post(endpoint, parameters)
@@ -33,7 +43,7 @@ def register_webhook(id):
     resp = make_request("setWebhook", {"url": path })
     print resp
     
-def send_message(id, text, reply_to = None):
+def format_message(id, text, reply_to = None):
     parameters = {"method": "sendMessage", "chat_id": id, "text": text}
     if reply_to is not None:
         parameters["reply_to_message_id"] = reply_to
@@ -64,6 +74,41 @@ current_question = {}
 redis_conn = redis.StrictRedis()
 print id
 
+@register_command("jeopardy")
+def jeopardy(parameters, message_id, chat_id, name):
+    current_question[chat_id] = get_question()
+    return format_message(chat_id, format_question(current_question[chat_id]))
+    
+@register_command("whatis", "whois")
+def answer_question(parameters, message_id, chat_id, name):
+    if current_question[chat_id] is None:
+        return ""
+    if response_correct(parameters, current_question[chat_id]["answer"].lower().strip()):
+        result = format_message(chat_id, "Correct", message_id)
+        redis_conn.incr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
+        current_question[chat_id] = None
+        return result
+    else:
+        redis_conn.decr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
+        return format_message(chat_id, "Incorrect", message_id)
+    
+@register_command("giveup")
+def giveup(parameters, message_id, chat_id, name):
+    if current_question[chat_id] is None:
+        return ""
+    result = format_message(chat_id, "Correct repsonse was: {0}".format(current_question[chat_id]["answer"]), None)
+    current_question[chat_id] = None
+    return result
+    
+@register_command("score")
+def get_score(parameters, message_id, chat_id, name):
+    keys = redis_conn.keys("{0}:{1}:*".format(REDIS_NAMESPACE, chat_id))
+    names = [x.split(":")[-1] for x in keys]
+    score_vals = [redis_conn.get(x) for x in keys]
+    scores = ["{0}: {1}".format(name, score) for name, score in zip(names, score_vals)]
+    score_string = "Scores:\n{0}".format("\n".join(scores))
+    return format_message(chat_id, score_string)
+
 @app.route("/{0}".format(id), methods=['POST'])
 def get_updates():
     json = request.get_json()
@@ -80,28 +125,9 @@ def get_updates():
         return ""
     if not chat_id in current_question:
         current_question[chat_id] = None
-    if text.lower().strip().startswith("/jeopardy"):
-        current_question[chat_id] = get_question()
-        return send_message(chat_id, format_question(current_question[chat_id]))
-    if (text.lower().strip().startswith("/whois ") or text.lower().strip().startswith("/whatis "))  and current_question[chat_id] is not None:
-        response = text.lower().strip().split(" ", 1)[-1]
-        if response_correct(response, current_question[chat_id]["answer"].lower().strip()):
-            result = send_message(chat_id, "Correct", message_id)
-            redis_conn.incr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
-            current_question[chat_id] = None
-            return result
-        else:
-            redis_conn.decr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
-            return send_message(chat_id, "Incorrect", message_id)
-    if text.lower().strip().startswith("/giveup") and current_question[chat_id] is not None:
-        result = send_message(chat_id, "Correct repsonse was: {0}".format(current_question[chat_id]["answer"]), None)
-        current_question[chat_id] = None
-        return result
-    if text.lower().strip().startswith("/score"):
-        keys = redis_conn.keys("{0}:{1}:*".format(REDIS_NAMESPACE, chat_id))
-        names = [x.split(":")[-1] for x in keys]
-        score_vals = [redis_conn.get(x) for x in keys]
-        scores = ["{0}: {1}".format(name, score) for name, score in zip(names, score_vals)]
-        score_string = "Scores:\n{0}".format("\n".join(scores))
-        return send_message(chat_id, score_string)
+    split = text.lower().strip().split(' ', 1)
+    command = split[0][1:].split("@")[0] if split[0].startswith("/") else None
+    parameters = split[1] if len(split) > 1 else None
+    if command in command_dict:
+        return command_dict[command](parameters, message_id, chat_id, name)
     return ""
