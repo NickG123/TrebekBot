@@ -145,7 +145,7 @@ def flag_error(chat_id, **kwargs):
     name = kwargs["name"]
     if reason is None:
         return format_message(chat_id, "Please provide a reason for this error report")
-    report = {"title": reason, "body": "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]), "labels": ["auto_created"]}
+    report = {"title": reason.title(), "body": "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]), "labels": ["auto_created"]}
     resp = requests.post("https://api.github.com/repos/{0}/{1}/issues".format(GITHUB_USER, GITHUB_REPO), params={"access_token": GITHUB_API_KEY}, data=json.dumps(report))
     if resp.status_code == 201:
         url = resp.json()["html_url"]
