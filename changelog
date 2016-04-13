@@ -1,3 +1,9 @@
+Version 0.1.1
+
+ - Made bot only respond to commands directed at it (or general commands)
+
+-----------------------------
+
 Version 0.1
 
  - Added changelog command

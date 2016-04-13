@@ -17,6 +17,7 @@ API_KEY = parser.get("config", "api_key")
 WEBHOOK_SERVER = parser.get("config", "webhook_server")
 JEOPARDY_SERVER = parser.get("config", "jeopardy_server")
 REDIS_NAMESPACE = parser.get("config", "redis_namespace")
+BOT_NAME = parser.get("config", "bot_name").lower()
 BANNED_WORDS = ["a", "the", "of", "and", "&"]
 
 app = Flask(__name__)
@@ -147,7 +148,11 @@ def get_updates():
     if not chat_id in current_question:
         current_question[chat_id] = None
     split = text.lower().strip().split(' ', 1)
-    command = split[0][1:].split("@")[0] if split[0].startswith("/") else None
+    command = split[0][1:] if split[0].startswith("/") else None
+    if "@" in command:
+        command, bot = command.split("@", 1)
+        if bot != BOT_NAME:
+            return ""
     parameters = split[1] if len(split) > 1 else None
     if command in command_dict:
         return command_dict[command](chat_id, name=name, parameters=parameters, message_id=message_id)
