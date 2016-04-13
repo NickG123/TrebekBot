@@ -1,3 +1,9 @@
+Version 0.2
+
+ - Added a flag command that allows for issue reporting
+
+-----------------------------
+
 Version 0.1.1
 
  - Made bot only respond to commands directed at it (or general commands)

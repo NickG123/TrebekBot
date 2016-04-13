@@ -1,7 +1,8 @@
+import json
 import os
+import redis
 import requests
 import uuid
-import redis
 
 from flask import Flask, jsonify, request
 from fuzzywuzzy import fuzz
@@ -18,6 +19,9 @@ WEBHOOK_SERVER = parser.get("config", "webhook_server")
 JEOPARDY_SERVER = parser.get("config", "jeopardy_server")
 REDIS_NAMESPACE = parser.get("config", "redis_namespace")
 BOT_NAME = parser.get("config", "bot_name").lower()
+GITHUB_API_KEY = parser.get("config", "github_api_key")
+GITHUB_REPO = parser.get("config", "github_repo")
+GITHUB_USER = parser.get("config", "github_user")
 BANNED_WORDS = ["a", "the", "of", "and", "&"]
 
 app = Flask(__name__)
@@ -73,6 +77,7 @@ def response_correct(response, answer):
     
 id = uuid.uuid4()
 register_webhook(id)
+last_question = {}
 current_question = {}
 redis_conn = redis.StrictRedis()
 print id
@@ -80,6 +85,7 @@ print id
 @register_command("jeopardy")
 def jeopardy(chat_id, **kwargs):
     current_question[chat_id] = get_question()
+    last_question[chat_id] = json.dumps(current_question[chat_id], indent=4, separators=(',', ': '))
     return format_message(chat_id, format_question(current_question[chat_id]))
     
 @register_command("whatis", "whois")
@@ -130,6 +136,28 @@ def get_changelog(chat_id, **kwargs):
             lines.append(line.strip())
         return format_message(chat_id, "\n".join(lines))
         
+@register_command("flag")
+def flag_error(chat_id, **kwargs):
+    message_id = kwargs["message_id"]
+    if last_question[chat_id] is None:
+        return format_message(chat_id, "Unable to file an error report, no question found")
+    reason = kwargs["parameters"]
+    name = kwargs["name"]
+    if reason is None:
+        return format_message(chat_id, "Please provide a reason for this error report")
+    report = {"title": reason, "body": "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]), "labels": ["auto_created"]}
+    resp = requests.post("https://api.github.com/repos/{0}/{1}/issues".format(GITHUB_USER, GITHUB_REPO), params={"access_token": GITHUB_API_KEY}, data=json.dumps(report))
+    if resp.status_code == 201:
+        url = resp.json()["html_url"]
+        current_question[chat_id] = None
+        return format_message(chat_id, "Error report filed successfully. You can track the issue here: {0}".format(url))
+    else:
+        try: 
+            data = resp.json()
+            err = "\n".join([x for x in data["message"].split("\n") if x])
+        except ValueError:
+            err = resp.reason
+        return format_message(chat_id, "Unable to file report.  Reason:\n\n{0}".format(err))
 
 @app.route("/{0}".format(id), methods=['POST'])
 def get_updates():
@@ -147,6 +175,8 @@ def get_updates():
         return ""
     if not chat_id in current_question:
         current_question[chat_id] = None
+    if not chat_id in last_question:
+        last_question[chat_id] = None
     split = text.lower().strip().split(' ', 1)
     command = split[0][1:] if split[0].startswith("/") else None
     if "@" in command:
