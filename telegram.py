@@ -11,6 +11,8 @@ here = os.path.dirname(__file__)
 parser = RawConfigParser()
 parser.read(os.path.join(here, "config"))
 
+changelog_path = os.path.join(here, "changelog")
+
 API_KEY = parser.get("config", "api_key")
 WEBHOOK_SERVER = parser.get("config", "webhook_server")
 JEOPARDY_SERVER = parser.get("config", "jeopardy_server")
@@ -75,15 +77,17 @@ redis_conn = redis.StrictRedis()
 print id
 
 @register_command("jeopardy")
-def jeopardy(parameters, message_id, chat_id, name):
+def jeopardy(chat_id, **kwargs):
     current_question[chat_id] = get_question()
     return format_message(chat_id, format_question(current_question[chat_id]))
     
 @register_command("whatis", "whois")
-def answer_question(parameters, message_id, chat_id, name):
+def answer_question(chat_id, **kwargs):
+    name = kwargs["name"]
+    message_id = kwargs["message_id"]
     if current_question[chat_id] is None:
         return ""
-    if response_correct(parameters, current_question[chat_id]["answer"].lower().strip()):
+    if response_correct(kwargs["parameters"], current_question[chat_id]["answer"].lower().strip()):
         result = format_message(chat_id, "Correct", message_id)
         redis_conn.incr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
         current_question[chat_id] = None
@@ -93,7 +97,7 @@ def answer_question(parameters, message_id, chat_id, name):
         return format_message(chat_id, "Incorrect", message_id)
     
 @register_command("giveup")
-def giveup(parameters, message_id, chat_id, name):
+def giveup(chat_id, **kwargs):
     if current_question[chat_id] is None:
         return ""
     result = format_message(chat_id, "Correct repsonse was: {0}".format(current_question[chat_id]["answer"]), None)
@@ -101,13 +105,30 @@ def giveup(parameters, message_id, chat_id, name):
     return result
     
 @register_command("score")
-def get_score(parameters, message_id, chat_id, name):
+def get_score(chat_id, **kwargs):
     keys = redis_conn.keys("{0}:{1}:*".format(REDIS_NAMESPACE, chat_id))
     names = [x.split(":")[-1] for x in keys]
     score_vals = [redis_conn.get(x) for x in keys]
     scores = ["{0}: {1}".format(name, score) for name, score in zip(names, score_vals)]
     score_string = "Scores:\n{0}".format("\n".join(scores))
     return format_message(chat_id, score_string)
+    
+@register_command("version")
+def get_version(chat_id, **kwargs):
+    with open(changelog_path, "rb") as f:
+        version = f.readline()
+        return format_message(chat_id, version)
+        
+@register_command("changelog")
+def get_changelog(chat_id, **kwargs):
+    with open(changelog_path, "rb") as f:
+        lines = []
+        for line in f:
+            if line.startswith("------"):
+                break
+            lines.append(line.strip())
+        return format_message(chat_id, "\n".join(lines))
+        
 
 @app.route("/{0}".format(id), methods=['POST'])
 def get_updates():
@@ -129,5 +150,5 @@ def get_updates():
     command = split[0][1:].split("@")[0] if split[0].startswith("/") else None
     parameters = split[1] if len(split) > 1 else None
     if command in command_dict:
-        return command_dict[command](parameters, message_id, chat_id, name)
+        return command_dict[command](chat_id, name=name, parameters=parameters, message_id=message_id)
     return ""
