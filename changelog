@@ -1,3 +1,9 @@
+Version 0.2.4
+
+ - Improved error handling
+
+-----------------------------
+
 Version 0.2.3
 
  - Fixed a bug where /whatis and /whois commands without parameters could crash the program

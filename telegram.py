@@ -2,6 +2,7 @@ import json
 import os
 import redis
 import requests
+import traceback
 import uuid
 
 from flask import Flask, jsonify, request
@@ -75,6 +76,10 @@ def filter_words(text):
 def response_correct(response, answer):
     return fuzz.token_sort_ratio(filter_words(response), filter_words(answer)) > 70
     
+def post_issue(title, body):
+    report = {"title": title.title(), "body": body, "labels": ["auto_created"]}
+    return requests.post("https://api.github.com/repos/{0}/{1}/issues".format(GITHUB_USER, GITHUB_REPO), params={"access_token": GITHUB_API_KEY}, data=json.dumps(report))
+    
 id = uuid.uuid4()
 register_webhook(id)
 last_question = {}
@@ -143,8 +148,7 @@ def flag_error(chat_id, message_id, parameters, name, **kwargs):
         return format_message(chat_id, "Unable to file an error report, no question found")
     if parameters is None:
         return format_message(chat_id, "Please provide a reason for this error report")
-    report = {"title": parameters.title(), "body": "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]), "labels": ["auto_created"]}
-    resp = requests.post("https://api.github.com/repos/{0}/{1}/issues".format(GITHUB_USER, GITHUB_REPO), params={"access_token": GITHUB_API_KEY}, data=json.dumps(report))
+    post_issue(parameters, "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]))
     if resp.status_code == 201:
         url = resp.json()["html_url"]
         current_question[chat_id] = None
@@ -153,35 +157,51 @@ def flag_error(chat_id, message_id, parameters, name, **kwargs):
         try: 
             data = resp.json()
             err = "\n".join([x for x in data["message"].split("\n") if x])
-        except ValueError:
+        except (ValueError, KeyError):
             err = resp.reason
         return format_message(chat_id, "Unable to file report.  Reason:\n\n{0}".format(err))
 
 @app.route("/{0}".format(id), methods=['POST'])
 def get_updates():
-    json = request.get_json()
     try:
-        message = json["message"]
-        text = message["text"]
-        message_id = message["message_id"]
-        chat_id = message["chat"]["id"]
-        user= message["from"]
-        name = user["first_name"]
-        if "last_name" in user:
-            name += " " + user["last_name"]
-    except KeyError:
-        return ""
-    if not chat_id in current_question:
-        current_question[chat_id] = None
-    if not chat_id in last_question:
-        last_question[chat_id] = None
-    split = text.lower().strip().split(' ', 1)
-    command = split[0][1:] if split[0].startswith("/") else None
-    if command is not None and "@" in command:
-        command, bot = command.split("@", 1)
-        if bot != BOT_NAME:
+        json = request.get_json()
+        try:
+            message = json["message"]
+            text = message["text"]
+            message_id = message["message_id"]
+            chat_id = message["chat"]["id"]
+            user= message["from"]
+            name = user["first_name"]
+            if "last_name" in user:
+                name += " " + user["last_name"]
+        except KeyError:
             return ""
-    parameters = split[1] if len(split) > 1 else None
-    if command in command_dict:
-        return command_dict[command](chat_id=chat_id, name=name, parameters=parameters, message_id=message_id)
-    return ""
+        if not chat_id in current_question:
+            current_question[chat_id] = None
+        if not chat_id in last_question:
+            last_question[chat_id] = None
+        split = text.lower().strip().split(' ', 1)
+        command = split[0][1:] if split[0].startswith("/") else None
+        if command is not None and "@" in command:
+            command, bot = command.split("@", 1)
+            if bot != BOT_NAME:
+                return ""
+        parameters = split[1] if len(split) > 1 else None
+        if command in command_dict:
+            return command_dict[command](chat_id=chat_id, name=name, parameters=parameters, message_id=message_id)
+        return ""
+    except Exception:
+        resp = post_issue("Crash Report", traceback.format_exc())
+        if resp.status_code == 200:
+            url = resp.json()["html_url"]
+            current_question[chat_id] = None
+            return format_message(chat_id, "Sorry, an unexpected error occurred. An error report has been automatically generated and is available here: {0}".format(url))
+        else:
+            traceback.print_exc()
+            try: 
+                data = resp.json()
+                err = "\n".join([x for x in data["message"].split("\n") if x])
+            except (ValueError, KeyError):
+                err = resp.reason
+            print err
+            return format_message(chat_id, "Sorry, an unexpected error occurred.  Generation of an error report failed, but the error has been logged")
