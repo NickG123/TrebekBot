@@ -62,8 +62,8 @@ def get_question():
     json = resp.json()
     return json
     
-def format_question(json):
-    return "{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"])
+def format_question(json, last_answer):
+    return "{5}{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"], "Last Answer: {0}\n".format(last_answer) if last_answer is not None else "")
     
 def filter_words(text):
     filtered_words = [x for x in text.split() if x not in BANNED_WORDS]
@@ -84,14 +84,13 @@ print id
 
 @register_command("jeopardy")
 def jeopardy(chat_id, **kwargs):
+    last_answer = current_question[chat_id]["answer"] if current_question[chat_id] is not None else None
     current_question[chat_id] = get_question()
     last_question[chat_id] = json.dumps(current_question[chat_id], indent=4, separators=(',', ': '))
-    return format_message(chat_id, format_question(current_question[chat_id]))
+    return format_message(chat_id, format_question(current_question[chat_id], last_answer))
     
 @register_command("whatis", "whois")
-def answer_question(chat_id, **kwargs):
-    name = kwargs["name"]
-    message_id = kwargs["message_id"]
+def answer_question(chat_id, name, message_id, **kwargs):
     if current_question[chat_id] is None:
         return ""
     if response_correct(kwargs["parameters"], current_question[chat_id]["answer"].lower().strip()):
@@ -137,15 +136,12 @@ def get_changelog(chat_id, **kwargs):
         return format_message(chat_id, "\n".join(lines))
         
 @register_command("flag")
-def flag_error(chat_id, **kwargs):
-    message_id = kwargs["message_id"]
+def flag_error(chat_id, message_id, parameters, name, **kwargs):
     if last_question[chat_id] is None:
         return format_message(chat_id, "Unable to file an error report, no question found")
-    reason = kwargs["parameters"]
-    name = kwargs["name"]
-    if reason is None:
+    if parameters is None:
         return format_message(chat_id, "Please provide a reason for this error report")
-    report = {"title": reason.title(), "body": "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]), "labels": ["auto_created"]}
+    report = {"title": parameters.title(), "body": "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]), "labels": ["auto_created"]}
     resp = requests.post("https://api.github.com/repos/{0}/{1}/issues".format(GITHUB_USER, GITHUB_REPO), params={"access_token": GITHUB_API_KEY}, data=json.dumps(report))
     if resp.status_code == 201:
         url = resp.json()["html_url"]
@@ -185,5 +181,5 @@ def get_updates():
             return ""
     parameters = split[1] if len(split) > 1 else None
     if command in command_dict:
-        return command_dict[command](chat_id, name=name, parameters=parameters, message_id=message_id)
+        return command_dict[command](chat_id=chat_id, name=name, parameters=parameters, message_id=message_id)
     return ""

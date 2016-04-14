@@ -1,3 +1,10 @@
+Version 0.2.1
+
+ - The jeopardy command now outputs the answer to the previous question if it has not been answered
+ - Improved how parameters are passed to commands
+
+-----------------------------
+
 Version 0.2
 
  - Added a flag command that allows for issue reporting
