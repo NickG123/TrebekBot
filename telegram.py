@@ -175,7 +175,7 @@ def get_updates():
         last_question[chat_id] = None
     split = text.lower().strip().split(' ', 1)
     command = split[0][1:] if split[0].startswith("/") else None
-    if "@" in command:
+    if command is not None and "@" in command:
         command, bot = command.split("@", 1)
         if bot != BOT_NAME:
             return ""
