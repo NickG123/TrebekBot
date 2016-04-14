@@ -1,3 +1,10 @@
+Version 0.2.3
+
+ - Fixed a bug where /whatis and /whois commands without parameters could crash the program
+
+-----------------------------
+
+
 Version 0.2.2
 
  - Fixed a bug where messages that don't start with / crash the program

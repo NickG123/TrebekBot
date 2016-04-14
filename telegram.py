@@ -90,10 +90,12 @@ def jeopardy(chat_id, **kwargs):
     return format_message(chat_id, format_question(current_question[chat_id], last_answer))
     
 @register_command("whatis", "whois")
-def answer_question(chat_id, name, message_id, **kwargs):
+def answer_question(chat_id, name, message_id, parameters, **kwargs):
     if current_question[chat_id] is None:
         return ""
-    if response_correct(kwargs["parameters"], current_question[chat_id]["answer"].lower().strip()):
+    if parameters is None:
+        return ""
+    if response_correct(parameters, current_question[chat_id]["answer"].lower().strip()):
         result = format_message(chat_id, "Correct", message_id)
         redis_conn.incr("{0}:{1}:{2}".format(REDIS_NAMESPACE, chat_id, name), current_question[chat_id]["value"])
         current_question[chat_id] = None
