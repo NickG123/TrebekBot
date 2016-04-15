@@ -1,3 +1,10 @@
+Version 0.2.5
+
+ - Added markdown code formatting to crash reports
+ - Added support for questions containing unicode
+
+-----------------------------
+
 Version 0.2.4
 
  - Improved error handling

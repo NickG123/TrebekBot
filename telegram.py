@@ -64,7 +64,7 @@ def get_question():
     return json
     
 def format_question(json, last_answer):
-    return "{5}{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"], "Last Answer: {0}\n".format(last_answer) if last_answer is not None else "")
+    return u"{5}{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"], "Last Answer: {0}\n".format(last_answer) if last_answer is not None else "")
     
 def filter_words(text):
     filtered_words = [x for x in text.split() if x not in BANNED_WORDS]
@@ -191,8 +191,8 @@ def get_updates():
             return command_dict[command](chat_id=chat_id, name=name, parameters=parameters, message_id=message_id)
         return ""
     except Exception:
-        resp = post_issue("Crash Report", traceback.format_exc())
-        if resp.status_code == 200:
+        resp = post_issue("Crash Report", "```\n{0}\n```".format(traceback.format_exc()))
+        if resp.status_code == 201:
             url = resp.json()["html_url"]
             current_question[chat_id] = None
             return format_message(chat_id, "Sorry, an unexpected error occurred. An error report has been automatically generated and is available here: {0}".format(url))
