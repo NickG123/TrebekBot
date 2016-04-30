@@ -148,7 +148,7 @@ def flag_error(chat_id, message_id, parameters, name, **kwargs):
         return format_message(chat_id, "Unable to file an error report, no question found")
     if parameters is None:
         return format_message(chat_id, "Please provide a reason for this error report")
-    post_issue(parameters, "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]))
+    resp = post_issue(parameters, "Reported by: {0}\nRaw Data:\n{1}".format(name, last_question[chat_id]))
     if resp.status_code == 201:
         url = resp.json()["html_url"]
         current_question[chat_id] = None

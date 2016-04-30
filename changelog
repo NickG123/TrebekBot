@@ -1,3 +1,9 @@
+Version 0.2.6
+
+ - Fixed a bug that caused a crash when flagging questions
+
+-----------------------------
+
 Version 0.2.5
 
  - Added markdown code formatting to crash reports
