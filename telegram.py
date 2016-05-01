@@ -78,9 +78,17 @@ def strip_brackets(text):
     return re.sub(r'\([^)]*\)', '', text)
     
 def response_correct(response, answer):
+    filtered_response = filter_words(response)
+    filtered_answer = filter_words(answer)
+    bracketless = strip_brackets(filtered_answer)
+    no_whitespace_response = filtered_response.replace(" ", "")
+    no_whitespace_answer = filtered_answer.replace(" ", "")
+    no_whitespace_bracketless = bracketless.replace(" ", "")
     score = max(
-        fuzz.token_sort_ratio(filter_words(response), filter_words(answer)),
-        fuzz.token_sort_ratio(filter_words(response), strip_brackets(filter_words(answer)))
+        fuzz.token_sort_ratio(filtered_response, filtered_answer),
+        fuzz.token_sort_ratio(filtered_response, bracketless),
+        fuzz.ratio(no_whitespace_response, no_whitespace_answer),
+        fuzz.ratio(no_whitespace_response, no_whitespace_bracketless)
     )
     return score > 70
     
