@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import redis
 import requests
 import traceback
@@ -72,9 +73,16 @@ def filter_words(text):
         return " ".join(filtered_words)
     else:
         return text
+        
+def strip_brackets(text):
+    return re.sub(r'\([^)]*\)', '', text)
     
 def response_correct(response, answer):
-    return fuzz.token_sort_ratio(filter_words(response), filter_words(answer)) > 70
+    score = max(
+        fuzz.token_sort_ratio(filter_words(response), filter_words(answer)),
+        fuzz.token_sort_ratio(filter_words(response), strip_brackets(filter_words(answer)))
+    )
+    return score > 70
     
 def post_issue(title, body):
     report = {"title": title.title(), "body": body, "labels": ["auto_created"]}
