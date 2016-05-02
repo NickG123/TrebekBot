@@ -1,3 +1,9 @@
+version 0.2.9
+
+ - Fixed another unicode error
+
+-----------------------------
+
 version 0.2.8
 
  - Modified scoring system to optionally ignore whitespace

@@ -65,7 +65,7 @@ def get_question():
     return json
     
 def format_question(json, last_answer):
-    return u"{5}{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"], "Last Answer: {0}\n".format(last_answer) if last_answer is not None else "")
+    return u"{5}{0} ${1}:\nCategory: {2}\n{3}\n{4}".format(json["round"], json["value"], json["category"], json["date"], json["question"], u"Last Answer: {0}\n".format(last_answer) if last_answer is not None else "")
     
 def filter_words(text):
     filtered_words = [x for x in text.split() if x not in BANNED_WORDS]
